@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>grok-bot — Mistral-powered</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --panel: #121214;
+    --border: #26262b;
+    --text: #f2f2f3;
+    --muted: #9a9aa3;
+    --accent: #d4ff4f;
+    --user-bubble: #1e1e23;
+    --error: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-wrap: wrap;
+  }
+  header .logo {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    font-size: 15px;
+  }
+  header .logo span { color: var(--accent); }
+  header .tag { color: var(--muted); font-size: 12px; }
+  header .spacer { flex: 1; }
+  header select, header input, header button {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  header input[type="password"] { width: 220px; }
+  header button { cursor: pointer; }
+  header button:hover { border-color: var(--accent); }
+  #key-btn { color: var(--muted); }
+  main { flex: 1; overflow-y: auto; padding: 20px 16px 28px; }
+  .wrap { max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 82%; padding: 11px 14px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: var(--user-bubble); border: 1px solid var(--border); border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: var(--panel); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .msg.bot .meta { display: block; margin-top: 8px; font-size: 11px; color: var(--muted); font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .msg.error { align-self: flex-start; border-color: var(--error); color: var(--error); }
+  .msg.bot pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; overflow-x: auto; white-space: pre; }
+  .msg.bot code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; background: var(--bg); padding: 1px 5px; border-radius: 5px; }
+  .msg.bot pre code { background: none; padding: 0; }
+  .typing { align-self: flex-start; color: var(--muted); font-style: italic; padding: 4px 6px; }
+  #empty {
+    margin: auto;
+    text-align: center;
+    color: var(--muted);
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+  }
+  #empty b { color: var(--accent); font-weight: 700; }
+  footer { border-top: 1px solid var(--border); background: var(--panel); padding: 10px 16px; }
+  .composer { max-width: 820px; margin: 0 auto; display: flex; gap: 10px; align-items: flex-end; }
+  #input {
+    flex: 1;
+    resize: none;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 11px 14px;
+    font: inherit;
+    max-height: 180px;
+  }
+  #input:focus { outline: none; border-color: var(--accent); }
+  #send {
+    background: var(--accent);
+    color: #0a0a0b;
+    border: none;
+    border-radius: 12px;
+    padding: 11px 20px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  #send:disabled { opacity: 0.4; cursor: default; }
+  .hint { max-width: 820px; margin: 6px auto 0; color: var(--muted); font-size: 11px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">GROK<span>-BOT</span></div>
+  <div class="tag">grok-style chat on mistral's hosted api // workflow: grok-bot</div>
+  <div class="spacer"></div>
+  <select id="model" title="Model">
+    <option value="mistral-large-latest" selected>mistral-large-latest</option>
+    <option value="mistral-medium-latest">mistral-medium-latest</option>
+    <option value="mistral-small-latest">mistral-small-latest</option>
+  </select>
+  <input id="key" type="password" placeholder="MISTRAL_API_KEY" title="API key — stored only in this browser's localStorage" />
+  <button id="key-btn" title="Save API key in this browser">save key</button>
+  <button id="new-chat" title="Clear the conversation">new chat</button>
+</header>
+<main id="main">
+  <div class="wrap" id="wrap">
+    <div id="empty"><b>grok-bot</b><br/>ask something. the key stays in your browser.<br/>enter sends · shift+enter newline</div>
+  </div>
+</main>
+<footer>
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="Message grok-bot…"></textarea>
+    <button id="send">Send</button>
+  </div>
+  <div class="hint" id="hint">POST https://api.mistral.ai/v1/workflows/grok-bot/execute · wait_for_result</div>
+</footer>
+<script>
+(function () {
+  "use strict";
+  var ENDPOINT = "https://api.mistral.ai/v1/workflows/grok-bot/execute";
+  var wrap = document.getElementById("wrap");
+  var main = document.getElementById("main");
+  var input = document.getElementById("input");
+  var sendBtn = document.getElementById("send");
+  var keyInput = document.getElementById("key");
+  var modelSel = document.getElementById("model");
+  var history = []; // [{role: "user"|"assistant", content: string}]
+
+  keyInput.value = localStorage.getItem("grokbot_key") || "";
+  modelSel.value = localStorage.getItem("grokbot_model") || "mistral-large-latest";
+
+  document.getElementById("key-btn").addEventListener("click", function () {
+    localStorage.setItem("grokbot_key", keyInput.value.trim());
+    flashHint("key saved in this browser only");
+  });
+  modelSel.addEventListener("change", function () {
+    localStorage.setItem("grokbot_model", modelSel.value);
+  });
+  document.getElementById("new-chat").addEventListener("click", function () {
+    history = [];
+    wrap.innerHTML = "";
+    wrap.appendChild(emptyEl());
+    input.focus();
+  });
+
+  function emptyEl() {
+    var d = document.createElement("div");
+    d.id = "empty";
+    d.innerHTML = "<b>grok-bot</b><br/>ask something. the key stays in your browser.<br/>enter sends · shift+enter newline";
+    return d;
+  }
+  function flashHint(text) {
+    var h = document.getElementById("hint");
+    var old = h.textContent;
+    h.textContent = text;
+    setTimeout(function () { h.textContent = old; }, 2500);
+  }
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  // minimal markdown: **bold**, *italic*, `code`, ``` blocks
+  function renderMarkdown(s) {
+    var html = escapeHtml(s);
+    html = html.replace(/```([\s\S]*?)```/g, function (_, code) {
+      return "<pre><code>" + code + "</code></pre>";
+    });
+    html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+    html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    return html;
+  }
+  function addMsg(role, content, meta) {
+    var empty = document.getElementById("empty");
+    if (empty) empty.remove();
+    var d = document.createElement("div");
+    d.className = "msg " + role;
+    if (role === "bot") d.innerHTML = renderMarkdown(content) + (meta ? '<span class="meta">' + escapeHtml(meta) + "</span>" : "");
+    else d.textContent = content;
+    wrap.appendChild(d);
+    main.scrollTop = main.scrollHeight;
+    return d;
+  }
+  function addError(text) {
+    var d = document.createElement("div");
+    d.className = "msg error";
+    d.textContent = text;
+    wrap.appendChild(d);
+    main.scrollTop = main.scrollHeight;
+  }
+  function setTyping(on) {
+    var t = document.getElementById("typing");
+    if (on && !t) {
+      t = document.createElement("div");
+      t.id = "typing";
+      t.className = "typing";
+      t.textContent = "grok-bot is thinking…";
+      wrap.appendChild(t);
+      main.scrollTop = main.scrollHeight;
+    } else if (!on && t) t.remove();
+  }
+
+  function autosize() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 180) + "px";
+  }
+  input.addEventListener("input", autosize);
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  sendBtn.addEventListener("click", send);
+
+  async function send() {
+    var text = input.value.trim();
+    if (!text) return;
+    var key = keyInput.value.trim();
+    if (!key) {
+      addError("Set your MISTRAL_API_KEY first (top right). It never leaves this browser except as the Bearer header to api.mistral.ai.");
+      keyInput.focus();
+      return;
+    }
+    input.value = "";
+    autosize();
+    sendBtn.disabled = true;
+    addMsg("user", text);
+    history.push({ role: "user", content: text });
+    setTyping(true);
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, 180000);
+    try {
+      var res = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + key,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          input: { messages: history, model: modelSel.value },
+          wait_for_result: true
+        }),
+        signal: ctrl.signal
+      });
+      var data = await res.json().catch(function () { return null; });
+      if (!res.ok) {
+        var msg = (data && (data.message || data.detail)) || ("HTTP " + res.status);
+        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      }
+      // shape: { result: { result: { reply, model, usage } } } — unwrap defensively
+      var r = data && data.result && data.result.result ? data.result.result : (data && data.result) || data;
+      var reply = r.reply || "";
+      var meta = r.model ? r.model + (r.usage && r.usage.total_tokens ? " · " + r.usage.total_tokens + " tok" : "") : "";
+      if (!reply) throw new Error("Empty reply from workflow (raw: " + JSON.stringify(data).slice(0, 300) + ")");
+      addMsg("bot", reply, meta);
+      history.push({ role: "assistant", content: reply });
+    } catch (err) {
+      addError(err.name === "AbortError" ? "Request timed out after 180s." : "Error: " + err.message);
+      history.pop(); // drop the unsanswered user message so retry keeps context clean
+    } finally {
+      clearTimeout(timer);
+      setTyping(false);
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+  input.focus();
+})();
+</script>
+</body>
+</html>
