@@ -7,7 +7,7 @@ which talks to the hosted ``/v1/chat/completions`` API with the worker's identit
 """
 
 from datetime import timedelta
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -66,7 +66,7 @@ class GrokBotOutput(BaseModel):
 
     reply: str
     model: str
-    usage: dict[str, int] = Field(default_factory=dict)
+    usage: dict[str, Any] = Field(default_factory=dict)
 
 
 def _to_request_message(message: ChatMessage) -> ChatCompletionRequestMessage:
