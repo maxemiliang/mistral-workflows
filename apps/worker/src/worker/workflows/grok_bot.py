@@ -58,7 +58,7 @@ class GrokBotInput(BaseModel):
         default=DEFAULT_MODEL, description="Hosted Mistral model to chat with."
     )
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=1024, ge=1)
+    max_tokens: int = Field(default=2048, ge=1)
 
 
 class GrokBotOutput(BaseModel):
@@ -110,5 +110,9 @@ class GrokBotWorkflow:
             ],
             temperature=input.temperature,
             max_tokens=input.max_tokens,
+            # A chatbot wants a snappy answer, not a reasoning trace: with small
+            # max_tokens the model can burn the whole budget on reasoning and
+            # return an empty reply.
+            reasoning_effort="none",
         )
         return await grok_chat(request)
