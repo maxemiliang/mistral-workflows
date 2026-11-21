@@ -59,6 +59,11 @@ class GrokBotInput(BaseModel):
     )
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=2048, ge=1)
+    reasoning_effort: str | None = Field(
+        default="low",
+        description="Reasoning effort passed to the model; null lets the model default apply. "
+        "mistral-large-latest supports low/medium/high.",
+    )
 
 
 class GrokBotOutput(BaseModel):
@@ -110,9 +115,8 @@ class GrokBotWorkflow:
             ],
             temperature=input.temperature,
             max_tokens=input.max_tokens,
-            # A chatbot wants a snappy answer, not a reasoning trace: with small
-            # max_tokens the model can burn the whole budget on reasoning and
-            # return an empty reply.
-            reasoning_effort="none",
+            # Keep reasoning light by default so small max_tokens budgets are not
+            # burned entirely on a reasoning trace with an empty reply.
+            reasoning_effort=input.reasoning_effort,
         )
         return await grok_chat(request)

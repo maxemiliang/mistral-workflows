@@ -54,6 +54,8 @@ async def test_grok_bot_answers_with_persona_and_conversation(temporal_env) -> N
     assert len(received_requests) == 1
     request = received_requests[0]
     assert request["model"] == "mistral-large-latest"
+    assert request["reasoning_effort"] == "low"
+    assert request["max_tokens"] == 2048
     messages = request["messages"]
     assert messages[0]["role"] == "system"
     assert GROK_PERSONA.splitlines()[0] in messages[0]["content"]
@@ -76,6 +78,7 @@ async def test_grok_bot_passes_model_and_sampling_overrides(temporal_env) -> Non
                 "model": "mistral-small-latest",
                 "temperature": 0.2,
                 "max_tokens": 64,
+                "reasoning_effort": "high",
             },
             id="test-grok-bot-overrides",
             task_queue="test-task-queue",
@@ -88,3 +91,4 @@ async def test_grok_bot_passes_model_and_sampling_overrides(temporal_env) -> Non
     assert request["model"] == "mistral-small-latest"
     assert request["temperature"] == 0.2
     assert request["max_tokens"] == 64
+    assert request["reasoning_effort"] == "high"
